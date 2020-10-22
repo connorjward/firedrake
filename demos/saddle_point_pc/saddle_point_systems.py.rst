@@ -471,7 +471,7 @@ variable. We can provide it as an AuxiliaryOperator via a python preconditioner.
             gamma = Constant(8.0)
             h = CellSize(W.mesh())
             h_avg = (h('+') + h('-'))/2
-            a_dg =  -(inner(grad(v), grad(u))*dx 
+            a_dg =  (inner(grad(v), grad(u))*dx 
             - dot(avg(grad(v)), jump(u, n))*dS \
             - dot(jump(v, n), avg(grad(u)))*dS \
             + alpha/h_avg * dot(jump(v, n), jump(u, n))*dS \
