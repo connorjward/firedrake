@@ -467,7 +467,7 @@ variable. We can provide it as an AuxiliaryOperator via a python preconditioner.
         def form(self, pc, u, v):
             W = u.function_space()
             n = FacetNormal(W.mesh())
-            alpha = Constant(8.0)
+            alpha = Constant(4.0)
             gamma = Constant(8.0)
             h = CellSize(W.mesh())
             h_avg = (h('+') + h('-'))/2
