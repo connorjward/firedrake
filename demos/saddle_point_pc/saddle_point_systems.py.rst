@@ -508,13 +508,13 @@ approximation we used above.
  Mesh elements  GMRES iterations
 ============== ==================
     2                 2
-    8                 10
-    32                17
-    128               19
-    512               20
-    2048              20
-    8192              19
-    32768             19
+    8                 12
+    32                23
+    128               26
+    512               28
+    2048              26
+    8192              26
+    32768             24
 ============== ==================
 
 Block diagonal preconditioners
