@@ -15,6 +15,7 @@ from firedrake.slate import slac, slate
 from firedrake.utils import ScalarType
 from pyop2 import op2
 from pyop2.exceptions import MapValueError, SparsityFormatError
+from pyop2.profiling import timed_function, timed_region
 
 
 __all__ = ("assemble", )
@@ -27,6 +28,7 @@ class AssemblyRank(IntEnum):
 
 
 @annotate_assemble
+@timed_function("firedrake.assemble:assemble")
 def assemble(expr, tensor=None, bcs=None, form_compiler_parameters=None,
              mat_type=None, sub_mat_type=None,
              appctx={}, options_prefix=None, **kwargs):
@@ -92,11 +94,11 @@ def assemble(expr, tensor=None, bcs=None, form_compiler_parameters=None,
 
     if isinstance(expr, (ufl.form.Form, slate.TensorBase)):
         loops = _assemble(expr, tensor=tensor, bcs=solving._extract_bcs(bcs),
-                          form_compiler_parameters=form_compiler_parameters,
-                          mat_type=mat_type,
-                          sub_mat_type=sub_mat_type, appctx=appctx,
-                          diagonal=diagonal,
-                          options_prefix=options_prefix)
+                        form_compiler_parameters=form_compiler_parameters,
+                        mat_type=mat_type,
+                        sub_mat_type=sub_mat_type, appctx=appctx,
+                        diagonal=diagonal,
+                        options_prefix=options_prefix)
         for l in loops:
             m = l()
         return m
@@ -317,6 +319,7 @@ def collect_lgmaps(matrix, all_bcs, Vrow, Vcol, row, col):
     return (rlgmap, clgmap), unroll
 
 
+@timed_function("firedrake.assemble:matrix_arg")
 def matrix_arg(access, get_map, row, col, *,
                all_bcs=(), matrix=None, Vrow=None, Vcol=None):
     """Obtain an op2.Arg for insertion into the given matrix.
@@ -337,8 +340,8 @@ def matrix_arg(access, get_map, row, col, *,
         maprow = get_map(Vrow)
         mapcol = get_map(Vcol)
         lgmaps, unroll = zip(*(collect_lgmaps(matrix, all_bcs,
-                                              Vrow, Vcol, i, j)
-                               for i, j in numpy.ndindex(matrix.block_shape)))
+                                            Vrow, Vcol, i, j)
+                            for i, j in numpy.ndindex(matrix.block_shape)))
         return matrix.M(access, (maprow, mapcol), lgmaps=tuple(lgmaps),
                         unroll_map=any(unroll))
     else:
@@ -348,7 +351,7 @@ def matrix_arg(access, get_map, row, col, *,
         lgmaps, unroll = collect_lgmaps(matrix, all_bcs,
                                         Vrow, Vcol, row, col)
         return matrix.M[row, col](access, (maprow, mapcol), lgmaps=(lgmaps, ),
-                                  unroll_map=unroll)
+                                unroll_map=unroll)
 
 
 def get_vector(argument, *, tensor=None):
@@ -496,6 +499,7 @@ def apply_bcs(tensor, bcs, *, assembly_rank=None, form_compiler_parameters=None,
             raise ValueError("Not expecting boundary conditions for 0-forms")
 
 
+@timed_function("firedrake.assemble:create_parloops")
 def create_parloops(expr, create_op2arg, *, assembly_rank=None, diagonal=False,
                     form_compiler_parameters=None):
     """Create parallel loops for assembly of expr.
@@ -577,7 +581,7 @@ def create_parloops(expr, create_op2arg, *, assembly_rank=None, diagonal=False,
             # parallel loops will (potentially) get created and called based on the
             # domain id: interior horizontal, bottom or top.
             kwargs["iterate"] = {"exterior_facet_top": op2.ON_TOP,
-                                 "exterior_facet_bottom": op2.ON_BOTTOM}[integral_type]
+                                "exterior_facet_bottom": op2.ON_BOTTOM}[integral_type]
 
             def get_map(x):
                 return x.cell_node_map()
@@ -593,7 +597,7 @@ def create_parloops(expr, create_op2arg, *, assembly_rank=None, diagonal=False,
                 return x.cell_node_map()
         else:
             raise ValueError("Unknown integral type '%s'" % integral_type)
-
+        
         # Output argument
         if assembly_rank == AssemblyRank.MATRIX:
             tensor_arg = create_op2arg(op2.INC, get_map, i, j)
@@ -634,6 +638,7 @@ def create_parloops(expr, create_op2arg, *, assembly_rank=None, diagonal=False,
 
 
 @utils.known_pyop2_safe
+@timed_function("firedrake.assemble:_assemble")
 def _assemble(expr, tensor=None, bcs=None, form_compiler_parameters=None,
               mat_type=None, sub_mat_type=None,
               appctx={},
@@ -705,24 +710,24 @@ def _assemble(expr, tensor=None, bcs=None, form_compiler_parameters=None,
     if assembly_rank == AssemblyRank.MATRIX:
         test, trial = expr.arguments()
         tensor, zeros, result = get_matrix(expr, mat_type, sub_mat_type,
-                                           bcs=bcs, options_prefix=options_prefix,
-                                           tensor=tensor,
-                                           appctx=appctx,
-                                           form_compiler_parameters=form_compiler_parameters)
+                                        bcs=bcs, options_prefix=options_prefix,
+                                        tensor=tensor,
+                                        appctx=appctx,
+                                        form_compiler_parameters=form_compiler_parameters)
         # intercept matrix-free matrices here
         if mat_type == "matfree":
             if tensor.a.arguments() != expr.arguments():
                 raise ValueError("Form's arguments do not match provided result "
-                                 "tensor")
+                                "tensor")
             tensor.assemble()
             yield result
             return
 
         create_op2arg = functools.partial(matrix_arg,
-                                          all_bcs=tuple(chain(*bcs)),
-                                          matrix=tensor,
-                                          Vrow=test.function_space(),
-                                          Vcol=trial.function_space())
+                                        all_bcs=tuple(chain(*bcs)),
+                                        matrix=tensor,
+                                        Vrow=test.function_space(),
+                                        Vcol=trial.function_space())
     elif assembly_rank == AssemblyRank.VECTOR:
         if diagonal:
             # actually a 2-form but throw away the trial space
@@ -734,7 +739,7 @@ def _assemble(expr, tensor=None, bcs=None, form_compiler_parameters=None,
         tensor, zeros, result = get_vector(test, tensor=tensor)
 
         create_op2arg = functools.partial(vector_arg, function=tensor,
-                                          V=test.function_space())
+                                        V=test.function_space())
     else:
         tensor, zeros, result = get_scalar(expr.arguments(), tensor=tensor)
         create_op2arg = tensor
@@ -743,18 +748,19 @@ def _assemble(expr, tensor=None, bcs=None, form_compiler_parameters=None,
         yield from zeros
 
     yield from create_parloops(expr, create_op2arg,
-                               assembly_rank=assembly_rank,
-                               diagonal=diagonal,
-                               form_compiler_parameters=form_compiler_parameters)
+                            assembly_rank=assembly_rank,
+                            diagonal=diagonal,
+                            form_compiler_parameters=form_compiler_parameters)
 
     yield from apply_bcs(tensor, bcs,
-                         assembly_rank=assembly_rank,
-                         form_compiler_parameters=form_compiler_parameters,
-                         mat_type=mat_type,
-                         sub_mat_type=sub_mat_type,
-                         appctx=appctx,
-                         diagonal=diagonal,
-                         assemble_now=assemble_now)
+                        assembly_rank=assembly_rank,
+                        form_compiler_parameters=form_compiler_parameters,
+                        mat_type=mat_type,
+                        sub_mat_type=sub_mat_type,
+                        appctx=appctx,
+                        diagonal=diagonal,
+                        assemble_now=assemble_now)
+
     if zero_tensor:
         if assembly_rank == AssemblyRank.MATRIX:
             # Queue up matrix assembly (after we've done all the other operations)
