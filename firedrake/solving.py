@@ -21,6 +21,8 @@ __all__ = ["solve"]
 
 import ufl
 
+from pyop2.profiling import timed_stage
+
 import firedrake.linear_solver as ls
 import firedrake.variational_solver as vs
 from firedrake import solving_utils
@@ -149,16 +151,20 @@ def _solve_varproblem(*args, **kwargs):
     # Solve linear variational problem
     if isinstance(eq.lhs, ufl.Form) and isinstance(eq.rhs, ufl.Form):
         # Create problem
-        problem = vs.LinearVariationalProblem(eq.lhs, eq.rhs, u, bcs, Jp,
-                                              form_compiler_parameters=form_compiler_parameters)
+        with timed_stage("Define Problem"):
+            problem = vs.LinearVariationalProblem(eq.lhs, eq.rhs, u, bcs, Jp,
+                                                form_compiler_parameters=form_compiler_parameters)
         # Create solver and call solve
-        solver = vs.LinearVariationalSolver(problem, solver_parameters=solver_parameters,
-                                            nullspace=nullspace,
-                                            transpose_nullspace=nullspace_T,
-                                            near_nullspace=near_nullspace,
-                                            options_prefix=options_prefix,
-                                            appctx=appctx)
-        solver.solve()
+        with timed_stage("Define Solver"):
+            solver = vs.LinearVariationalSolver(problem, solver_parameters=solver_parameters,
+                                                nullspace=nullspace,
+                                                transpose_nullspace=nullspace_T,
+                                                near_nullspace=near_nullspace,
+                                                options_prefix=options_prefix,
+                                                appctx=appctx)
+
+        with timed_stage("Solve"):
+            solver.solve()
 
     # Solve nonlinear variational problem
     else:
