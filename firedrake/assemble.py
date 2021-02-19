@@ -415,9 +415,20 @@ def get_scalar(arguments, *, tensor=None):
     return tensor, (), lambda: tensor.data[0]
 
 
-def apply_bcs(tensor, bcs, *, assembly_rank=None, form_compiler_parameters=None,
-              mat_type=None, sub_mat_type=None, appctx={}, diagonal=False,
-              assemble_now=True):
+def _apply_bcs(bcs, *, tensor, assembly_rank, **kwargs):
+    if assembly_rank == AssemblyRank.SCALAR and len(bcs) != 0:
+        raise ValueError("Not expecting boundary conditions for 0-forms")
+
+    dirichlet_bcs = tuple(bc for bc in bcs if isinstance(bc, DirichletBC))
+    yield from _apply_dirichlet_bcs(tensor, dirichlet_bcs, assembly_rank, **kwargs)
+
+    equation_bcs = tuple(bc for bc in bcs if isinstance(bc, EquationBCSplit))
+    yield from _apply_equation_bcs(equation_bcs, tensor=tensor, assembly_rank=assembly_rank, **kwargs)
+
+
+def _apply_dirichlet_bcs(tensor, bcs, assembly_rank, *, form_compiler_parameters=None,
+                        mat_type=None, sub_mat_type=None, appctx={}, diagonal=False,
+                        assemble_now=True):
     """Apply boundary conditions to a tensor.
 
     :arg tensor: The tensor.
@@ -433,12 +444,10 @@ def apply_bcs(tensor, bcs, *, assembly_rank=None, form_compiler_parameters=None,
     :arg assemble_now: Will assembly happen right away?
     :returns: generator of zero-argument callables for applying the bcs.
     """
-    dirichletbcs = tuple(bc for bc in bcs if isinstance(bc, DirichletBC))
-    equationbcs = tuple(bc for bc in bcs if isinstance(bc, EquationBCSplit))
     if assembly_rank == AssemblyRank.MATRIX:
         op2tensor = tensor.M
         shape = tuple(len(a.function_space()) for a in tensor.a.arguments())
-        for bc in dirichletbcs:
+        for bc in bcs:
             V = bc.function_space()
             nodes = bc.nodes
             for i, j in numpy.ndindex(shape):
@@ -463,16 +472,8 @@ def apply_bcs(tensor, bcs, *, assembly_rank=None, form_compiler_parameters=None,
                     yield functools.partial(op2tensor[i, j].set_local_diagonal_entries, nodes)
                 else:
                     raise RuntimeError("Unhandled BC case")
-        for bc in equationbcs:
-            yield from _assemble(bc.f, tensor=tensor, bcs=bc.bcs,
-                                 form_compiler_parameters=form_compiler_parameters,
-                                 mat_type=mat_type,
-                                 sub_mat_type=sub_mat_type,
-                                 appctx=appctx,
-                                 assemble_now=assemble_now,
-                                 zero_tensor=False)
     elif assembly_rank == AssemblyRank.VECTOR:
-        for bc in dirichletbcs:
+        for bc in bcs:
             if assemble_now:
                 if diagonal:
                     yield functools.partial(bc.set, tensor, 1)
@@ -480,23 +481,19 @@ def apply_bcs(tensor, bcs, *, assembly_rank=None, form_compiler_parameters=None,
                     yield functools.partial(bc.apply, tensor)
             else:
                 yield functools.partial(bc.zero, tensor)
-        for bc in equationbcs:
-            if diagonal:
-                raise NotImplementedError("diagonal assembly and EquationBC not supported")
+
+
+def _apply_equation_bcs(bcs, *, tensor, assembly_rank, diagonal, **kwargs):
+    if assembly_rank == AssemblyRank.VECTOR and diagonal:
+            raise NotImplementedError("Diagonal assembly and EquationBC not supported")
+    for bc in bcs:
+        if assembly_rank == AssemblyRank.VECTOR: 
             yield functools.partial(bc.zero, tensor)
-            yield from _assemble(bc.f, tensor=tensor, bcs=bc.bcs,
-                                 form_compiler_parameters=form_compiler_parameters,
-                                 mat_type=mat_type,
-                                 sub_mat_type=sub_mat_type,
-                                 appctx=appctx,
-                                 assemble_now=assemble_now,
-                                 zero_tensor=False)
-    else:
-        if len(bcs) != 0:
-            raise ValueError("Not expecting boundary conditions for 0-forms")
+        yield from _assemble(bc.f, tensor=tensor, bcs=bc.bcs, 
+                             diagonal=diagonal, zero_tensor=False, **kwargs)
 
 
-def create_parloops(expr, create_op2arg, *, assembly_rank=None, diagonal=False,
+def _create_parloops(expr, create_op2arg, *, assembly_rank=None, diagonal=False,
                     form_compiler_parameters=None):
     """Create parallel loops for assembly of expr.
 
@@ -742,12 +739,12 @@ def _assemble(expr, tensor=None, bcs=None, form_compiler_parameters=None,
     if zero_tensor:
         yield from zeros
 
-    yield from create_parloops(expr, create_op2arg,
+    yield from _create_parloops(expr, create_op2arg,
                                assembly_rank=assembly_rank,
                                diagonal=diagonal,
                                form_compiler_parameters=form_compiler_parameters)
 
-    yield from apply_bcs(tensor, bcs,
+    yield from _apply_bcs(bcs, tensor=tensor,
                          assembly_rank=assembly_rank,
                          form_compiler_parameters=form_compiler_parameters,
                          mat_type=mat_type,
