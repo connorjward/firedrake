@@ -415,8 +415,8 @@ def get_scalar(arguments, *, tensor=None):
     return tensor, (), lambda: tensor.data[0]
 
 
-def _apply_bcs(bcs, *, tensor, assembly_rank, **kwargs):
-    if assembly_rank == AssemblyRank.SCALAR and len(bcs) != 0:
+def apply_bcs(bcs, *, tensor, assembly_rank, **kwargs):
+    if assembly_rank == AssemblyRank.SCALAR:
         raise ValueError("Not expecting boundary conditions for 0-forms")
 
     dirichlet_bcs = tuple(bc for bc in bcs if isinstance(bc, DirichletBC))
@@ -493,7 +493,7 @@ def _apply_equation_bcs(bcs, *, tensor, assembly_rank, diagonal, **kwargs):
                              diagonal=diagonal, zero_tensor=False, **kwargs)
 
 
-def _create_parloops(expr, create_op2arg, *, assembly_rank=None, diagonal=False,
+def create_parloops(expr, create_op2arg, *, assembly_rank=None, diagonal=False,
                     form_compiler_parameters=None):
     """Create parallel loops for assembly of expr.
 
@@ -739,19 +739,20 @@ def _assemble(expr, tensor=None, bcs=None, form_compiler_parameters=None,
     if zero_tensor:
         yield from zeros
 
-    yield from _create_parloops(expr, create_op2arg,
+    yield from create_parloops(expr, create_op2arg,
                                assembly_rank=assembly_rank,
                                diagonal=diagonal,
                                form_compiler_parameters=form_compiler_parameters)
 
-    yield from _apply_bcs(bcs, tensor=tensor,
-                         assembly_rank=assembly_rank,
-                         form_compiler_parameters=form_compiler_parameters,
-                         mat_type=mat_type,
-                         sub_mat_type=sub_mat_type,
-                         appctx=appctx,
-                         diagonal=diagonal,
-                         assemble_now=assemble_now)
+    if bcs:
+        yield from apply_bcs(bcs, tensor=tensor,
+                             assembly_rank=assembly_rank,
+                             form_compiler_parameters=form_compiler_parameters,
+                             mat_type=mat_type,
+                             sub_mat_type=sub_mat_type,
+                             appctx=appctx,
+                             diagonal=diagonal,
+                             assemble_now=assemble_now)
     if zero_tensor:
         if assembly_rank == AssemblyRank.MATRIX:
             # Queue up matrix assembly (after we've done all the other operations)
