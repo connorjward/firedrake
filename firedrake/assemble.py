@@ -92,73 +92,54 @@ def assemble(expr, tensor=None, bcs=None, form_compiler_parameters=None,
 
     if isinstance(expr, (ufl.form.Form, slate.TensorBase)):
         assembly_rank = _get_assembly_rank(expr, diagonal)
-        if tensor:
-            _check_existing_tensor(tensor, assembly_rank)
-            _zero_tensor(tensor, assembly_rank)
-        else:
-            tensor = _make_tensor(assembly_rank)
-
-        _assemble_expr(expr, tensor)
-
-        if assembly_rank == AssemblyRank.MATRIX:
-            tensor.M.assemble
-
         if assembly_rank == AssemblyRank.SCALAR:
-            return tensor.data[0]
-        else:
-            return tensor
+            return _assemble_scalar()
+        elif assembly_rank == AssemblyRank.VECTOR:
+            return _assemble_vector()
+        elif assembly_rank == AssemblyRank.MATRIX:
+            return _assemble_matrix()
     elif isinstance(expr, ufl.core.expr.Expr):
         return assemble_expressions.assemble_expression(expr)
     else:
         raise TypeError(f"Unable to assemble: {expr}")
 
 
-def _make_tensor(assembly_rank, expr_args, mat_type, sub_mat_type):
-    if assembly_rank == AssemblyRank.SCALAR:
-        if len(expr_args) != 0:
-            raise ValueError("Can't assemble a 0-form with arguments")
-        return _make_scalar()
-    elif assembly_rank == AssemblyRank.VECTOR:
-        return _make_vector(expr_args)
-    elif assembly_rank == AssemblyRank.MATRIX:
-        return _make_matrix(mat_type, sub_mat_type)
+def _assemble_scalar(expr, scalar):
+    if scalar:
+        raise ValueError("Can't assemble 0-form into existing tensor")
+    scalar = _make_scalar(assembly_rank)
+    _assemble_expr(expr, scalar)
+    return scalar.data[0]
+
+
+def _assemble_vector(expr, vector):
+    if vector:
+        test, = expr.arguments()
+        if test.function_space != vector.function_space:
+            raise ValueError("Form's argument does not match provided result tensor")
+        vector.dat.zero()
     else:
-        raise AssertionError
+        vector = _make_vector()
+    _assemble_expr(expr, vector)
+    return vector
 
 
-def _make_scalar():
+def _assemble_matrix(expr, matrix):
+    if matrix:
+        if not matfree:
+            tensor.M.zero()
+    ...
+
+
+def _make_scalar(expr):
+    if len(expr.arguments()) != 0:
+        raise ValueError("Can't assemble a 0-form with arguments")
     return op2.Global(1, [0.0], dtype=utils.ScalarType)
 
 
-def _make_vector(test_func):
-    return firedrake.Function(test_func.function_space())
-
-
-def _check_existing_tensor(tensor, expr, matfree):
-    if assembly_rank == AssemblyRank.SCALAR:
-        raise ValueError("Can't assemble 0-form into existing tensor")
-    elif assembly_rank == AssemblyRank.VECTOR:
-        test, = expr.arguments()
-        if test.function_space != tensor.function_space:
-            raise ValueError("Form's argument does not match provided result tensor")
-    elif assembly_rank == AssemblyRank.MATRIX:
-        if tensor.a.arguments() != expr.arguments():
-            raise ValueError("Form's arguments do not match provided result tensor")
-        if matfree and not isinstance(tensor, matrix.ImplicitMatrix):
-            raise ValueError("Expecting implicit matrix with matfree")
-
-
-
-def _zero_tensor(tensor, assembly_rank, matfree):
-    if assembly_rank == AssemblyRank.SCALAR:
-        pass
-    elif assembly_rank == AssemblyRank.VECTOR:
-        tensor.dat.zero()
-    elif assembly_rank == AssemblyRank.MATRIX:
-        if not matfree:
-            tensor.M.zero()
-    else:
-        raise AssertionError
+def _make_vector(expr):
+    test, = expr.arguments()
+    return firedrake.Function(test.function_space())
 
 
 def _assemble_expr(expr, tensor):
@@ -166,7 +147,7 @@ def _assemble_expr(expr, tensor):
     if cache_key in expr._cache:
         parloop = expr._cache[cache_key]
     else:
-        parloop = _make_parloop(...)
+        parloop = _make_parloop(expr)
         expr._cache[cache_key] = parloop
     parloop.compute(out=tensor.dat)
 
@@ -447,17 +428,6 @@ def vector_arg(access, get_map, i, *, function=None, V=None):
         return function.dat[i](access, map_)
 
 
-def apply_bcs(bcs, *, tensor, assembly_rank, **kwargs):
-    if assembly_rank == AssemblyRank.SCALAR:
-        raise ValueError("Not expecting boundary conditions for 0-forms")
-
-    dirichlet_bcs = tuple(bc for bc in bcs if isinstance(bc, DirichletBC))
-    yield from _apply_dirichlet_bcs(tensor, dirichlet_bcs, assembly_rank, **kwargs)
-
-    equation_bcs = tuple(bc for bc in bcs if isinstance(bc, EquationBCSplit))
-    yield from _apply_equation_bcs(equation_bcs, tensor=tensor, assembly_rank=assembly_rank, **kwargs)
-
-
 def _apply_dirichlet_bcs(tensor, bcs, assembly_rank, *,
                         mat_type=None, sub_mat_type=None, appctx={}, diagonal=False,
                         assemble_now=True):
@@ -525,7 +495,7 @@ def _apply_equation_bcs(bcs, *, tensor, assembly_rank, diagonal, **kwargs):
                              diagonal=diagonal, zero_tensor=False, **kwargs)
 
 
-def _make_parloop(expr, create_op2arg, *, assembly_rank=None, diagonal=False,
+def _make_parloop_inner(expr, create_op2arg, *, assembly_rank=None, diagonal=False,
                     form_compiler_parameters=None):
     """Create parallel loops for assembly of expr.
 
@@ -675,14 +645,14 @@ def _get_assembly_rank(expr, diagonal):
         return AssemblyRank.MATRIX
     raise AssertionError
 
+
 @utils.known_pyop2_safe
-def _assemble(expr, tensor=None, bcs=None, form_compiler_parameters=None,
+def _make_parloop(expr, tensor=None, bcs=None, form_compiler_parameters=None,
               mat_type=None, sub_mat_type=None,
               appctx={},
               options_prefix=None,
               zero_tensor=True,
-              diagonal=False,
-              assemble_now=True):
+              diagonal=False):
     r"""Assemble the form or Slate expression expr and return a Firedrake object
     representing the result. This will be a :class:`float` for 0-forms/rank-0
     Slate tensors, a :class:`.Function` for 1-forms/rank-1 Slate tensors and
@@ -773,20 +743,7 @@ def _assemble(expr, tensor=None, bcs=None, form_compiler_parameters=None,
         tensor, zeros, result = get_scalar(expr.arguments(), tensor=tensor)
         create_op2arg = tensor
 
-    if zero_tensor:
-        yield from zeros
-
-    yield from create_parloops(expr, create_op2arg,
+    return _make_parloop_inner(expr, create_op2arg,
                                assembly_rank=assembly_rank,
                                diagonal=diagonal,
                                form_compiler_parameters=form_compiler_parameters)
-
-    if bcs:
-        yield from apply_bcs(bcs, tensor=tensor,
-                             assembly_rank=assembly_rank,
-                             form_compiler_parameters=form_compiler_parameters,
-                             mat_type=mat_type,
-                             sub_mat_type=sub_mat_type,
-                             appctx=appctx,
-                             diagonal=diagonal,
-                             assemble_now=assemble_now)
