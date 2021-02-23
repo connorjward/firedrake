@@ -95,11 +95,11 @@ def assemble(expr, tensor=None, bcs=None, form_compiler_parameters=None,
         mat_type, sub_mat_type = get_mat_type(mat_type, sub_mat_type, expr.arguments())
         assembly_rank = _get_assembly_rank(expr, diagonal)
         if assembly_rank == AssemblyRank.SCALAR:
-            return _assemble_scalar(expr, tensor, bcs=bcs, form_compiler_parameters=form_compiler_parameters, mat_type=mat_type, sub_mat_type=sub_mat_type, diagonal=diagonal, appctx=appctx, options_prefix=options_prefix)
+            return _assemble_scalar(expr, tensor, bcs=bcs, form_compiler_parameters=form_compiler_parameters, mat_type=mat_type, sub_mat_type=sub_mat_type, appctx=appctx, options_prefix=options_prefix)
         elif assembly_rank == AssemblyRank.VECTOR:
             return _assemble_vector(expr, tensor, bcs=bcs, form_compiler_parameters=form_compiler_parameters, mat_type=mat_type, sub_mat_type=sub_mat_type, diagonal=diagonal, appctx=appctx, options_prefix=options_prefix)
         elif assembly_rank == AssemblyRank.MATRIX:
-            return _assemble_matrix(expr, tensor, bcs=bcs, form_compiler_parameters=form_compiler_parameters, mat_type=mat_type, sub_mat_type=sub_mat_type, diagonal=diagonal, appctx=appctx, options_prefix=options_prefix)
+            return _assemble_matrix(expr, tensor, bcs=bcs, form_compiler_parameters=form_compiler_parameters, mat_type=mat_type, sub_mat_type=sub_mat_type, appctx=appctx, options_prefix=options_prefix)
     elif isinstance(expr, ufl.core.expr.Expr):
         return assemble_expressions.assemble_expression(expr)
     else:
@@ -113,31 +113,37 @@ def _assemble_scalar(expr, scalar, **kwargs):
         raise ValueError("Can't assemble 0-form into existing tensor")
 
     scalar = _make_scalar()
-    _assemble_expr(expr, scalar, **kwargs)
+    _assemble_expr(expr, scalar, diagonal=False, **kwargs)
     return scalar.data[0]
 
 
-def _assemble_vector(expr, vector, **kwargs):
-    if vector:
+def _assemble_vector(expr, vector, *, diagonal, **kwargs):
+    if diagonal:
+        test, trial = expr.arguments()
+        if test.function_space() != trial.function_space():
+            raise ValueError("Can only assemble diagonal of 2-form if functionspaces match")
+    else:
         test, = expr.arguments()
+    if vector:
         if test.function_space() != vector.function_space():
             raise ValueError("Form's argument does not match provided result tensor")
         vector.dat.zero()
     else:
-        vector = _make_vector(expr)
-    _assemble_expr(expr, vector, **kwargs)
+        vector = _make_vector(test)
+    _assemble_expr(expr, vector, diagonal=diagonal, **kwargs)
     return vector
 
 
-def _assemble_matrix(expr, matrix, *, mat_type, **kwargs):
+def _assemble_matrix(expr, matrix, *, mat_type, sub_mat_type, bcs, options_prefix, appctx, form_compiler_parameters):
     if matrix:
         if mat_type != "matfree":
             matrix.M.zero()
         if matrix.a.arguments() != expr.arguments():
             raise ValueError("Form's arguments do not match provided result tensor")
     else:
-        matrix = _make_matrix(expr, )
-    _assemble_expr(expr, matrix, **kwargs)
+        matrix = _make_matrix(expr, mat_type=mat_type, sub_mat_type=sub_mat_type, bcs=bcs, options_prefix=options_prefix, appctx=appctx, form_compiler_parameters=form_compiler_parameters)
+    _assemble_expr(expr, matrix, diagonal=False, mat_type=mat_type, sub_mat_type=sub_mat_type, bcs=bcs, options_prefix=options_prefix, appctx=appctx, form_compiler_parameters=form_compiler_parameters)
+    matrix.M.assemble()
     return matrix
 
 
@@ -145,19 +151,20 @@ def _make_scalar():
     return op2.Global(1, [0.0], dtype=utils.ScalarType)
 
 
-def _make_vector(expr):
-    test, = expr.arguments()
+def _make_vector(test):
     return firedrake.Function(test.function_space())
 
 
 def _assemble_expr(expr, tensor, *, bcs, diagonal, **kwargs):
     bcs = _preprocess_bcs(bcs)
-    if "parloop" in expr._cache:
-        parloop = expr._cache["parloop"]
+    if "parloops" in expr._cache:
+        parloops = expr._cache["parloops"]
     else:
-        parloop = _make_parloop(expr, tensor, bcs=bcs, diagonal=diagonal, **kwargs)
-        expr._cache["parloop"] = parloop
-    parloop.compute(out=tensor.dat)
+        parloops = _make_parloops(expr, tensor, bcs=bcs, diagonal=diagonal, **kwargs)
+        expr._cache["parloops"] = parloops
+    # parloop.compute(out=tensor.dat)
+    for parloop in parloops:
+        parloop.compute()
 
     assembly_rank = _get_assembly_rank(expr, diagonal)
 
@@ -258,9 +265,9 @@ def create_assembly_callable(expr, tensor=None, bcs=None, form_compiler_paramete
     return thunk
 
 
-def _make_matrix(expr, mat_type, sub_mat_type, *, bcs=None,
-               options_prefix=None, appctx=None,
-               form_compiler_parameters=None):
+def _make_matrix(expr, mat_type, sub_mat_type, *, bcs,
+               options_prefix, appctx,
+               form_compiler_parameters):
     """Get a matrix for the assembly of expr.
 
     :arg mat_type, sub_mat_type: See :func:`get_mat_type`.
@@ -276,8 +283,8 @@ def _make_matrix(expr, mat_type, sub_mat_type, *, bcs=None,
        tensor, callable is a function of zero arguments that returns
        the tensor.
     """
-    mat_type, sub_mat_type = get_mat_type(mat_type, sub_mat_type,
-                                          expr.arguments())
+    # mat_type, sub_mat_type = get_mat_type(mat_type, sub_mat_type,
+    #                                       expr.arguments())
     matfree = mat_type == "matfree"
     arguments = expr.arguments()
     if bcs is None:
@@ -492,8 +499,8 @@ def _apply_dirichlet_bcs(tensor, bcs, assembly_rank, *,
                 bc.zero(tensor)
 
 
-def _make_parloop_inner(expr, create_op2arg, *, assembly_rank=None, diagonal=False,
-                    form_compiler_parameters=None):
+def _make_parloop_inner(expr, create_op2arg, *, assembly_rank, diagonal,
+                    form_compiler_parameters):
     """Create parallel loops for assembly of expr.
 
     :arg expr: The expression to assemble.
@@ -524,6 +531,7 @@ def _make_parloop_inner(expr, create_op2arg, *, assembly_rank=None, diagonal=Fal
     for k, v in all_integer_subdomain_ids.items():
         all_integer_subdomain_ids[k] = tuple(sorted(v))
 
+    parloops = []
     for indices, kinfo in kernels:
         kernel = kinfo.kernel
         integral_type = kinfo.integral_type
@@ -624,9 +632,10 @@ def _make_parloop_inner(expr, create_op2arg, *, assembly_rank=None, diagonal=Fal
         args.extend(extra_args)
         kwargs["pass_layer_arg"] = pass_layer_arg
         try:
-            return op2.ParLoop(*args, **kwargs)
+            parloops.append(op2.ParLoop(*args, **kwargs))
         except MapValueError:
             raise RuntimeError("Integral measure does not match measure of all coefficients/arguments")
+    return tuple(parloops)
 
 
 def _get_assembly_rank(expr, diagonal):
@@ -643,8 +652,8 @@ def _get_assembly_rank(expr, diagonal):
     raise AssertionError
 
 
-# @utils.known_pyop2_safe
-def _make_parloop(expr, tensor, *, bcs, 
+@utils.known_pyop2_safe
+def _make_parloops(expr, tensor, *, bcs, 
               form_compiler_parameters,
               mat_type, sub_mat_type,
               appctx,
@@ -717,9 +726,7 @@ def _make_parloop(expr, tensor, *, bcs,
     elif assembly_rank == AssemblyRank.VECTOR:
         if diagonal:
             # actually a 2-form but throw away the trial space
-            test, trial = expr.arguments()
-            if test.function_space() != trial.function_space():
-                raise ValueError("Can only assemble diagonal of 2-form if functionspaces match")
+            test, _ = expr.arguments()
         else:
             test, = expr.arguments()
         create_op2arg = functools.partial(vector_arg, function=tensor,
