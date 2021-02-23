@@ -210,23 +210,22 @@ def get_mat_type(mat_type, sub_mat_type, arguments):
     return mat_type, sub_mat_type
 
 
-# def allocate_matrix(expr, bcs=(), form_compiler_parameters=None,
-#                     mat_type=None, sub_mat_type=None, appctx={},
-#                     options_prefix=None):
-#     r"""Allocate a matrix given an expression.
+def allocate_matrix(expr, bcs=(), form_compiler_parameters=None,
+                    mat_type=None, sub_mat_type=None, appctx={},
+                    options_prefix=None):
+    r"""Allocate a matrix given an expression.
 
-#     To be used with :func:`create_assembly_callable`.
+    To be used with :func:`create_assembly_callable`.
 
-#     .. warning::
+    .. warning::
 
-#        Do not use this function unless you know what you're doing.
-#     """
-#     _, _, result = get_matrix(expr, mat_type, sub_mat_type,
-#                               bcs=bcs,
-#                               options_prefix=options_prefix,
-#                               appctx=appctx,
-#                               form_compiler_parameters=form_compiler_parameters)
-#     return result()
+       Do not use this function unless you know what you're doing.
+    """
+    return _make_matrix(expr, mat_type, sub_mat_type,
+                              bcs=bcs,
+                              options_prefix=options_prefix,
+                              appctx=appctx,
+                              form_compiler_parameters=form_compiler_parameters)
 
 
 def create_assembly_callable(expr, tensor=None, bcs=None, form_compiler_parameters=None,
@@ -246,19 +245,20 @@ def create_assembly_callable(expr, tensor=None, bcs=None, form_compiler_paramete
         raise ValueError("Have to provide tensor to write to")
     if mat_type == "matfree":
         return tensor.assemble
-    loops = _assemble(expr, tensor=tensor, bcs=solving._extract_bcs(bcs),
-                      form_compiler_parameters=form_compiler_parameters,
-                      mat_type=mat_type,
-                      sub_mat_type=sub_mat_type,
-                      diagonal=diagonal,
-                      assemble_now=False)
+    # loops = _assemble(expr, tensor=tensor, bcs=solving._extract_bcs(bcs),
+    #                   form_compiler_parameters=form_compiler_parameters,
+    #                   mat_type=mat_type,
+    #                   sub_mat_type=sub_mat_type,
+    #                   diagonal=diagonal,
+    #                   assemble_now=False)
 
-    loops = tuple(loops)
+    # loops = tuple(loops)
 
-    def thunk():
-        for kernel in loops:
-            kernel()
-    return thunk
+    # def thunk():
+    #     for kernel in loops:
+    #         kernel()
+    # return thunk
+    return functools.partial(assemble, expr, tensor, bcs, form_compiler_parameters, mat_type, sub_mat_type)
 
 
 def _make_matrix(expr, mat_type, sub_mat_type, *, bcs,
@@ -279,8 +279,8 @@ def _make_matrix(expr, mat_type, sub_mat_type, *, bcs,
        tensor, callable is a function of zero arguments that returns
        the tensor.
     """
-    # mat_type, sub_mat_type = get_mat_type(mat_type, sub_mat_type,
-    #                                       expr.arguments())
+    mat_type, sub_mat_type = get_mat_type(mat_type, sub_mat_type,
+                                          expr.arguments())
     matfree = mat_type == "matfree"
     arguments = expr.arguments()
     if bcs is None:
