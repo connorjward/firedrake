@@ -161,16 +161,18 @@ def _assemble_expr(expr, tensor, *, bcs, diagonal, **kwargs):
         parloops = expr._cache["parloops"]
     else:
         parloops = _make_parloops(expr, tensor, bcs=bcs, diagonal=diagonal, **kwargs)
-        expr._cache["parloops"] = parloops
+        # TODO: Reimplement this when PyOP2 functionality added.
+        # expr._cache["parloops"] = parloops
     # parloop.compute(out=tensor.dat)
     for parloop in parloops:
         parloop.compute()
 
     assembly_rank = _get_assembly_rank(expr, diagonal)
 
-    dir_bcs, eq_bcs = _split_bcs(bcs)
+    dir_bcs = tuple(bc for bc in bcs if isinstance(bc, DirichletBC))
     _apply_dirichlet_bcs(tensor, dir_bcs, assembly_rank, diagonal=diagonal, assemble_now=True)
 
+    eq_bcs = tuple(bc for bc in bcs if isinstance(bc, EquationBC))
     if eq_bcs and diagonal:
         raise NotImplementedError("Diagonal assembly and EquationBC not supported")
     for bc in eq_bcs:
@@ -181,12 +183,6 @@ def _assemble_expr(expr, tensor, *, bcs, diagonal, **kwargs):
 
 def _preprocess_bcs(bcs):
     return tuple(bc.extract_form("F") for bc in solving._extract_bcs(bcs))
-
-
-def _split_bcs(bcs):
-    dir_bcs = tuple(bc for bc in bcs if isinstance(bc, DirichletBC))
-    eq_bcs = tuple(bc for bc in bcs if isinstance(bc, EquationBC))
-    return dir_bcs, eq_bcs
 
 
 def get_mat_type(mat_type, sub_mat_type, arguments):
@@ -214,23 +210,23 @@ def get_mat_type(mat_type, sub_mat_type, arguments):
     return mat_type, sub_mat_type
 
 
-def allocate_matrix(expr, bcs=(), form_compiler_parameters=None,
-                    mat_type=None, sub_mat_type=None, appctx={},
-                    options_prefix=None):
-    r"""Allocate a matrix given an expression.
+# def allocate_matrix(expr, bcs=(), form_compiler_parameters=None,
+#                     mat_type=None, sub_mat_type=None, appctx={},
+#                     options_prefix=None):
+#     r"""Allocate a matrix given an expression.
 
-    To be used with :func:`create_assembly_callable`.
+#     To be used with :func:`create_assembly_callable`.
 
-    .. warning::
+#     .. warning::
 
-       Do not use this function unless you know what you're doing.
-    """
-    _, _, result = get_matrix(expr, mat_type, sub_mat_type,
-                              bcs=bcs,
-                              options_prefix=options_prefix,
-                              appctx=appctx,
-                              form_compiler_parameters=form_compiler_parameters)
-    return result()
+#        Do not use this function unless you know what you're doing.
+#     """
+#     _, _, result = get_matrix(expr, mat_type, sub_mat_type,
+#                               bcs=bcs,
+#                               options_prefix=options_prefix,
+#                               appctx=appctx,
+#                               form_compiler_parameters=form_compiler_parameters)
+#     return result()
 
 
 def create_assembly_callable(expr, tensor=None, bcs=None, form_compiler_parameters=None,
@@ -349,9 +345,8 @@ def _make_matrix(expr, mat_type, sub_mat_type, *, bcs,
         raise ValueError("Monolithic matrix assembly not supported for systems "
                          "with R-space blocks")
 
-    tensor = matrix.Matrix(expr, bcs, mat_type, sparsity, ScalarType,
+    return matrix.Matrix(expr, bcs, mat_type, sparsity, ScalarType,
                            options_prefix=options_prefix)
-    return tensor
 
 
 def collect_lgmaps(matrix, all_bcs, Vrow, Vcol, row, col):
@@ -390,7 +385,7 @@ def collect_lgmaps(matrix, all_bcs, Vrow, Vcol, row, col):
 
 
 def matrix_arg(access, get_map, row, col, *,
-               all_bcs=(), matrix=None, Vrow=None, Vcol=None):
+               all_bcs, matrix, Vrow, Vcol):
     """Obtain an op2.Arg for insertion into the given matrix.
 
     :arg access: Access descriptor.
@@ -423,7 +418,7 @@ def matrix_arg(access, get_map, row, col, *,
                                   unroll_map=unroll)
 
 
-def vector_arg(access, get_map, i, *, function=None, V=None):
+def vector_arg(access, get_map, i, *, function, V):
     """Obtain an op2.Arg for insertion into given Function.
 
     :arg access: access descriptor.
