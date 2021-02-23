@@ -157,13 +157,14 @@ def _make_vector(test):
 
 def _assemble_expr(expr, tensor, *, bcs, diagonal, **kwargs):
     bcs = _preprocess_bcs(bcs)
-    if "parloops" in expr._cache:
-        parloops = expr._cache["parloops"]
-    else:
-        parloops = _make_parloops(expr, tensor, bcs=bcs, diagonal=diagonal, **kwargs)
-        # TODO: Reimplement this when PyOP2 functionality added.
+    # TODO: Reimplement this when PyOP2 functionality added.
+    # if "parloops" in expr._cache:
+    #     parloops = expr._cache["parloops"]
+    # else:
+        # parloops = _make_parloops(expr, tensor, bcs=bcs, diagonal=diagonal, **kwargs)
         # expr._cache["parloops"] = parloops
     # parloop.compute(out=tensor.dat)
+    parloops = _make_parloops(expr, tensor, bcs=bcs, diagonal=diagonal, **kwargs)
     for parloop in parloops:
         parloop.compute()
 
