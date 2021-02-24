@@ -9,8 +9,8 @@ import numpy
 import ufl
 from firedrake import (assemble_expressions, matrix, parameters, solving,
                        tsfc_interface, utils)
-from firedrake.adjoint import annotate_assemble, assembly
-from firedrake.bcs import DirichletBC, EquationBC, EquationBCSplit
+from firedrake.adjoint import annotate_assemble
+from firedrake.bcs import DirichletBC, EquationBC
 from firedrake.slate import slac, slate
 from firedrake.utils import ScalarType
 from pyop2 import op2
@@ -165,8 +165,8 @@ def _assemble_expr(expr, tensor, *, bcs, diagonal, assemble_now, **kwargs):
     # if "parloops" in expr._cache:
     #     parloops = expr._cache["parloops"]
     # else:
-        # parloops = _make_parloops(expr, tensor, bcs=bcs, diagonal=diagonal, **kwargs)
-        # expr._cache["parloops"] = parloops
+    #     parloops = _make_parloops(expr, tensor, bcs=bcs, diagonal=diagonal, **kwargs)
+    #     expr._cache["parloops"] = parloops
     # parloop.compute(out=tensor.dat)
     parloops = _make_parloops(expr, tensor, bcs=bcs, diagonal=diagonal, **kwargs)
     for parloop in parloops:
@@ -181,7 +181,7 @@ def _assemble_expr(expr, tensor, *, bcs, diagonal, assemble_now, **kwargs):
     if eq_bcs and diagonal:
         raise NotImplementedError("Diagonal assembly and EquationBC not supported")
     for bc in eq_bcs:
-        if assembly_rank == AssemblyRank.VECTOR: 
+        if assembly_rank == AssemblyRank.VECTOR:
             bc.zero(tensor)
         _assemble_expr(bc.f, tensor, bcs=bc.bcs, diagonal=diagonal, **kwargs)
 
@@ -227,10 +227,10 @@ def allocate_matrix(expr, bcs=(), form_compiler_parameters=None,
        Do not use this function unless you know what you're doing.
     """
     return _make_matrix(expr, mat_type, sub_mat_type,
-                              bcs=bcs,
-                              options_prefix=options_prefix,
-                              appctx=appctx,
-                              form_compiler_parameters=form_compiler_parameters)
+                        bcs=bcs,
+                        options_prefix=options_prefix,
+                        appctx=appctx,
+                        form_compiler_parameters=form_compiler_parameters)
 
 
 def create_assembly_callable(expr, tensor=None, bcs=None, form_compiler_parameters=None,
@@ -252,8 +252,8 @@ def create_assembly_callable(expr, tensor=None, bcs=None, form_compiler_paramete
 
 
 def _make_matrix(expr, mat_type, sub_mat_type, *, bcs,
-               options_prefix, appctx,
-               form_compiler_parameters):
+                 options_prefix, appctx,
+                 form_compiler_parameters):
     """Get a matrix for the assembly of expr.
 
     :arg mat_type, sub_mat_type: See :func:`get_mat_type`.
@@ -281,9 +281,9 @@ def _make_matrix(expr, mat_type, sub_mat_type, *, bcs,
                             "Preprocess by extracting the appropriate form with bc.extract_form('Jp') or bc.extract_form('J')")
     if matfree:
         return matrix.ImplicitMatrix(expr, bcs,
-                                        fc_params=form_compiler_parameters,
-                                        appctx=appctx,
-                                        options_prefix=options_prefix)
+                                     fc_params=form_compiler_parameters,
+                                     appctx=appctx,
+                                     options_prefix=options_prefix)
 
     integral_types = set(i.integral_type() for i in expr.integrals())
     for bc in bcs:
@@ -336,7 +336,7 @@ def _make_matrix(expr, mat_type, sub_mat_type, *, bcs,
                          "with R-space blocks")
 
     return matrix.Matrix(expr, bcs, mat_type, sparsity, ScalarType,
-                           options_prefix=options_prefix)
+                         options_prefix=options_prefix)
 
 
 def collect_lgmaps(matrix, all_bcs, Vrow, Vcol, row, col):
@@ -428,8 +428,8 @@ def vector_arg(access, get_map, i, *, function, V):
 
 
 def _apply_dirichlet_bcs(tensor, bcs, assembly_rank, *,
-                        diagonal,
-                        assemble_now):
+                         diagonal,
+                         assemble_now):
     """Apply boundary conditions to a tensor.
 
     :arg tensor: The tensor.
@@ -485,7 +485,7 @@ def _apply_dirichlet_bcs(tensor, bcs, assembly_rank, *,
 
 
 def _make_parloop_inner(expr, create_op2arg, *, assembly_rank, diagonal,
-                    form_compiler_parameters):
+                        form_compiler_parameters):
     """Create parallel loops for assembly of expr.
 
     :arg expr: The expression to assemble.
@@ -638,12 +638,12 @@ def _get_assembly_rank(expr, diagonal):
 
 
 @utils.known_pyop2_safe
-def _make_parloops(expr, tensor, *, bcs, 
-              form_compiler_parameters,
-              mat_type, sub_mat_type,
-              appctx,
-              options_prefix,
-              diagonal):
+def _make_parloops(expr, tensor, *, bcs,
+                   form_compiler_parameters,
+                   mat_type, sub_mat_type,
+                   appctx,
+                   options_prefix,
+                   diagonal):
     r"""Assemble the form or Slate expression expr and return a Firedrake object
     representing the result. This will be a :class:`float` for 0-forms/rank-0
     Slate tensors, a :class:`.Function` for 1-forms/rank-1 Slate tensors and
