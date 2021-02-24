@@ -29,7 +29,7 @@ class AssemblyRank(IntEnum):
 @annotate_assemble
 def assemble(expr, tensor=None, bcs=None, form_compiler_parameters=None,
              mat_type=None, sub_mat_type=None,
-             appctx={}, options_prefix=None, **kwargs):
+             appctx={}, options_prefix=None, assemble_now=True, **kwargs):
     # TODO: Add warning that caching on compiler params is not done.
     r"""Evaluate expr.
 
@@ -95,29 +95,29 @@ def assemble(expr, tensor=None, bcs=None, form_compiler_parameters=None,
         mat_type, sub_mat_type = get_mat_type(mat_type, sub_mat_type, expr.arguments())
         assembly_rank = _get_assembly_rank(expr, diagonal)
         if assembly_rank == AssemblyRank.SCALAR:
-            return _assemble_scalar(expr, tensor, bcs=bcs, form_compiler_parameters=form_compiler_parameters, mat_type=mat_type, sub_mat_type=sub_mat_type, appctx=appctx, options_prefix=options_prefix)
+            return _assemble_scalar(expr, tensor, bcs=bcs, form_compiler_parameters=form_compiler_parameters, mat_type=mat_type, sub_mat_type=sub_mat_type, appctx=appctx, options_prefix=options_prefix, assemble_now=assemble_now)
         elif assembly_rank == AssemblyRank.VECTOR:
-            return _assemble_vector(expr, tensor, bcs=bcs, form_compiler_parameters=form_compiler_parameters, mat_type=mat_type, sub_mat_type=sub_mat_type, diagonal=diagonal, appctx=appctx, options_prefix=options_prefix)
+            return _assemble_vector(expr, tensor, bcs=bcs, form_compiler_parameters=form_compiler_parameters, mat_type=mat_type, sub_mat_type=sub_mat_type, diagonal=diagonal, appctx=appctx, options_prefix=options_prefix, assemble_now=assemble_now)
         elif assembly_rank == AssemblyRank.MATRIX:
-            return _assemble_matrix(expr, tensor, bcs=bcs, form_compiler_parameters=form_compiler_parameters, mat_type=mat_type, sub_mat_type=sub_mat_type, appctx=appctx, options_prefix=options_prefix)
+            return _assemble_matrix(expr, tensor, bcs=bcs, form_compiler_parameters=form_compiler_parameters, mat_type=mat_type, sub_mat_type=sub_mat_type, appctx=appctx, options_prefix=options_prefix, assemble_now=assemble_now)
     elif isinstance(expr, ufl.core.expr.Expr):
         return assemble_expressions.assemble_expression(expr)
     else:
         raise TypeError(f"Unable to assemble: {expr}")
 
 
-def _assemble_scalar(expr, scalar, **kwargs):
+def _assemble_scalar(expr, scalar, assemble_now, **kwargs):
     if len(expr.arguments()) != 0:
         raise ValueError("Can't assemble a 0-form with arguments")
     if scalar:
         raise ValueError("Can't assemble 0-form into existing tensor")
 
     scalar = _make_scalar()
-    _assemble_expr(expr, scalar, diagonal=False, **kwargs)
+    _assemble_expr(expr, scalar, diagonal=False, assemble_now=assemble_now, **kwargs)
     return scalar.data[0]
 
 
-def _assemble_vector(expr, vector, *, diagonal, **kwargs):
+def _assemble_vector(expr, vector, *, diagonal, assemble_now, **kwargs):
     if diagonal:
         test, trial = expr.arguments()
         if test.function_space() != trial.function_space():
@@ -130,11 +130,11 @@ def _assemble_vector(expr, vector, *, diagonal, **kwargs):
         vector.dat.zero()
     else:
         vector = _make_vector(test)
-    _assemble_expr(expr, vector, diagonal=diagonal, **kwargs)
+    _assemble_expr(expr, vector, diagonal=diagonal, assemble_now=assemble_now, **kwargs)
     return vector
 
 
-def _assemble_matrix(expr, matrix, *, mat_type, sub_mat_type, bcs, options_prefix, appctx, form_compiler_parameters):
+def _assemble_matrix(expr, matrix, *, mat_type, sub_mat_type, bcs, options_prefix, appctx, form_compiler_parameters, assemble_now):
     if matrix:
         if mat_type != "matfree":
             matrix.M.zero()
@@ -142,7 +142,7 @@ def _assemble_matrix(expr, matrix, *, mat_type, sub_mat_type, bcs, options_prefi
             raise ValueError("Form's arguments do not match provided result tensor")
     else:
         matrix = _make_matrix(expr, mat_type=mat_type, sub_mat_type=sub_mat_type, bcs=bcs, options_prefix=options_prefix, appctx=appctx, form_compiler_parameters=form_compiler_parameters)
-    _assemble_expr(expr, matrix, diagonal=False, mat_type=mat_type, sub_mat_type=sub_mat_type, bcs=bcs, options_prefix=options_prefix, appctx=appctx, form_compiler_parameters=form_compiler_parameters)
+    _assemble_expr(expr, matrix, diagonal=False, mat_type=mat_type, sub_mat_type=sub_mat_type, bcs=bcs, options_prefix=options_prefix, appctx=appctx, form_compiler_parameters=form_compiler_parameters, assemble_now=assemble_now)
     matrix.M.assemble()
     return matrix
 
@@ -155,7 +155,7 @@ def _make_vector(test):
     return firedrake.Function(test.function_space())
 
 
-def _assemble_expr(expr, tensor, *, bcs, diagonal, **kwargs):
+def _assemble_expr(expr, tensor, *, bcs, diagonal, assemble_now, **kwargs):
     bcs = _preprocess_bcs(bcs)
     # TODO: Reimplement this when PyOP2 functionality added.
     # if "parloops" in expr._cache:
@@ -171,7 +171,7 @@ def _assemble_expr(expr, tensor, *, bcs, diagonal, **kwargs):
     assembly_rank = _get_assembly_rank(expr, diagonal)
 
     dir_bcs = tuple(bc for bc in bcs if isinstance(bc, DirichletBC))
-    _apply_dirichlet_bcs(tensor, dir_bcs, assembly_rank, diagonal=diagonal, assemble_now=True)
+    _apply_dirichlet_bcs(tensor, dir_bcs, assembly_rank, diagonal=diagonal, assemble_now=assemble_now)
 
     eq_bcs = tuple(bc for bc in bcs if isinstance(bc, EquationBC))
     if eq_bcs and diagonal:
@@ -259,7 +259,7 @@ def create_assembly_callable(expr, tensor=None, bcs=None, form_compiler_paramete
     #     for kernel in loops:
     #         kernel()
     # return thunk
-    return functools.partial(assemble, expr, tensor, bcs, form_compiler_parameters, mat_type, sub_mat_type)
+    return functools.partial(assemble, expr, tensor, bcs, form_compiler_parameters, mat_type, sub_mat_type, assemble_now=False)
 
 
 def _make_matrix(expr, mat_type, sub_mat_type, *, bcs,
