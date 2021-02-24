@@ -248,19 +248,6 @@ def create_assembly_callable(expr, tensor=None, bcs=None, form_compiler_paramete
     """
     if tensor is None:
         raise ValueError("Have to provide tensor to write to")
-    # loops = _assemble(expr, tensor=tensor, bcs=solving._extract_bcs(bcs),
-    #                   form_compiler_parameters=form_compiler_parameters,
-    #                   mat_type=mat_type,
-    #                   sub_mat_type=sub_mat_type,
-    #                   diagonal=diagonal,
-    #                   assemble_now=False)
-
-    # loops = tuple(loops)
-
-    # def thunk():
-    #     for kernel in loops:
-    #         kernel()
-    # return thunk
     return functools.partial(assemble, expr, tensor, bcs, form_compiler_parameters, mat_type, sub_mat_type, assemble_now=False)
 
 
