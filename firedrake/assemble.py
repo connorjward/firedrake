@@ -142,8 +142,12 @@ def _assemble_matrix(expr, matrix, *, mat_type, sub_mat_type, bcs, options_prefi
             raise ValueError("Form's arguments do not match provided result tensor")
     else:
         matrix = _make_matrix(expr, mat_type=mat_type, sub_mat_type=sub_mat_type, bcs=bcs, options_prefix=options_prefix, appctx=appctx, form_compiler_parameters=form_compiler_parameters)
-    _assemble_expr(expr, matrix, diagonal=False, mat_type=mat_type, sub_mat_type=sub_mat_type, bcs=bcs, options_prefix=options_prefix, appctx=appctx, form_compiler_parameters=form_compiler_parameters, assemble_now=assemble_now)
-    matrix.M.assemble()
+
+    if mat_type == "matfree":
+        matrix.assemble()
+    else:
+        _assemble_expr(expr, matrix, diagonal=False, mat_type=mat_type, sub_mat_type=sub_mat_type, bcs=bcs, options_prefix=options_prefix, appctx=appctx, form_compiler_parameters=form_compiler_parameters, assemble_now=assemble_now)
+        matrix.M.assemble()
     return matrix
 
 
@@ -244,8 +248,6 @@ def create_assembly_callable(expr, tensor=None, bcs=None, form_compiler_paramete
     """
     if tensor is None:
         raise ValueError("Have to provide tensor to write to")
-    if mat_type == "matfree":
-        return tensor.assemble
     # loops = _assemble(expr, tensor=tensor, bcs=solving._extract_bcs(bcs),
     #                   form_compiler_parameters=form_compiler_parameters,
     #                   mat_type=mat_type,
