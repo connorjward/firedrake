@@ -171,12 +171,13 @@ def _assemble_expr(expr, tensor, *, bcs, diagonal, assemble_now, **kwargs):
     # When we generate a new parloop the old one is removed from the cache to
     # prevent leaking memory.
     cache_key = "parloops"
-    parloops = None
     if cache_key in expr._cache:
-        if expr._cache[cache_key][0] is not tensor:
+        cached_tensor, parloops = expr._cache[cache_key]
+        if cached_tensor is not tensor:
+            parloops = None
             del expr._cache[cache_key]
-        else:
-            _, parloops = expr._cache[cache_key]
+    else:
+        parloops = None
 
     if not parloops:
         parloops = _make_parloops(expr, tensor, bcs=bcs, diagonal=diagonal, **kwargs)
