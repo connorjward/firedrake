@@ -165,18 +165,24 @@ def _make_vector(test):
 def _assemble_expr(expr, tensor, *, bcs, diagonal, assemble_now, **kwargs):
     bcs = _preprocess_bcs(bcs)
 
-    cache_key = ("parloops", tensor)  # cheap hack until PyOP2 stuff done
-    # if "parloops" in expr._cache:
+    # We cache the parloops on the form but keep track of the tensor. If the
+    # tensor is changed then we need to regenerate the parloop (until parloops
+    # stop depending on data).
+    # When we generate a new parloop the old one is removed from the cache to
+    # prevent leaking memory.
+    cache_key = "parloops"
+    parloops = None
     if cache_key in expr._cache:
-        # parloops = expr._cache["parloops"]
-        parloops = expr._cache[cache_key]
-    else:
+        if expr._cache[cache_key][0] is not tensor:
+            del expr._cache[cache_key]
+        else:
+            _, parloops = expr._cache[cache_key]
+
+    if not parloops:
         parloops = _make_parloops(expr, tensor, bcs=bcs, diagonal=diagonal, **kwargs)
-        # expr._cache["parloops"] = parloops
-        expr._cache[cache_key] = parloops
+        expr._cache[cache_key] = (tensor, parloops)
     for parloop in parloops:
         parloop.compute()
-        # parloop.compute(out=tensor.dat)
 
     assembly_rank = _get_assembly_rank(expr, diagonal)
 
