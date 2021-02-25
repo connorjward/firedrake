@@ -16,8 +16,11 @@ from firedrake.utils import ScalarType
 from pyop2 import op2
 from pyop2.exceptions import MapValueError, SparsityFormatError
 
+from firedrake.petsc import PETSc
+PETSc.Sys.popErrorHandler()
 
-__all__ = ("assemble", )
+
+__all__ = ("assemble",)
 
 
 class AssemblyRank(IntEnum):
@@ -161,16 +164,19 @@ def _make_vector(test):
 
 def _assemble_expr(expr, tensor, *, bcs, diagonal, assemble_now, **kwargs):
     bcs = _preprocess_bcs(bcs)
-    # TODO: Reimplement this when PyOP2 functionality added.
+
+    cache_key = ("parloops", tensor)  # cheap hack until PyOP2 stuff done
     # if "parloops" in expr._cache:
-    #     parloops = expr._cache["parloops"]
-    # else:
-    #     parloops = _make_parloops(expr, tensor, bcs=bcs, diagonal=diagonal, **kwargs)
-    #     expr._cache["parloops"] = parloops
-    # parloop.compute(out=tensor.dat)
-    parloops = _make_parloops(expr, tensor, bcs=bcs, diagonal=diagonal, **kwargs)
+    if cache_key in expr._cache:
+        # parloops = expr._cache["parloops"]
+        parloops = expr._cache[cache_key]
+    else:
+        parloops = _make_parloops(expr, tensor, bcs=bcs, diagonal=diagonal, **kwargs)
+        # expr._cache["parloops"] = parloops
+        expr._cache[cache_key] = parloops
     for parloop in parloops:
         parloop.compute()
+        # parloop.compute(out=tensor.dat)
 
     assembly_rank = _get_assembly_rank(expr, diagonal)
 
