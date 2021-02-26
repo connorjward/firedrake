@@ -1,6 +1,6 @@
 import functools
 import operator
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict, defaultdict, namedtuple
 from enum import Enum, IntEnum
 from itertools import chain
 
@@ -33,10 +33,18 @@ class AssemblyType(Enum):
     RESIDUAL = "residual"
 
 
+_AssemblyOpts = namedtuple("_AssemblyOpts", ["assembly_rank",
+                                             "diagonal",
+                                             "assembly_type",
+                                             "fc_params",
+                                             "mat_type",
+                                             "sub_mat_type",
+                                             "appctx",
+                                             "options_prefix"])
+
+
 @annotate_assemble
-def assemble(expr, tensor=None, bcs=None, form_compiler_parameters=None,
-             mat_type=None, sub_mat_type=None,
-             appctx={}, options_prefix=None, assembly_type="solution", **kwargs):
+def assemble(expr, *args, **kwargs):
     # TODO: Add warning that caching on compiler params is not done.
     r"""Evaluate expr.
 
@@ -89,31 +97,71 @@ def assemble(expr, tensor=None, bcs=None, form_compiler_parameters=None,
     1-form, the vector entries at boundary nodes are set to the
     boundary condition values.
     """
-    if "nest" in kwargs:
-        raise ValueError("Can't use 'nest', set 'mat_type' instead")
-    if "collect_loops" in kwargs or "allocate_only" in kwargs:
-        raise RuntimeError
-    if assembly_type not in ("solution", "residual"):
-        raise ValueError("assembly_type must be either 'solution' or 'residual'")
-
-    diagonal = kwargs.pop("diagonal", False)
-    if len(kwargs) > 0:
-        raise TypeError("Unknown keyword arguments '%s'" % ', '.join(kwargs.keys()))
-
     if isinstance(expr, (ufl.form.Form, slate.TensorBase)):
-        mat_type, sub_mat_type = get_mat_type(mat_type, sub_mat_type, expr.arguments())
-        assembly_rank = _get_assembly_rank(expr, diagonal)
-        bcs = solving._extract_bcs(bcs)
-        if assembly_rank == AssemblyRank.SCALAR:
-            return _assemble_scalar(expr, tensor, bcs=bcs, form_compiler_parameters=form_compiler_parameters, mat_type=mat_type, sub_mat_type=sub_mat_type, appctx=appctx, options_prefix=options_prefix, assembly_type=assembly_type)
-        elif assembly_rank == AssemblyRank.VECTOR:
-            return _assemble_vector(expr, tensor, bcs=bcs, form_compiler_parameters=form_compiler_parameters, mat_type=mat_type, sub_mat_type=sub_mat_type, diagonal=diagonal, appctx=appctx, options_prefix=options_prefix, assembly_type=assembly_type)
-        elif assembly_rank == AssemblyRank.MATRIX:
-            return _assemble_matrix(expr, tensor, bcs=bcs, form_compiler_parameters=form_compiler_parameters, mat_type=mat_type, sub_mat_type=sub_mat_type, appctx=appctx, options_prefix=options_prefix, assembly_type=assembly_type)
+        _assemble(expr, *args, **kwargs)
     elif isinstance(expr, ufl.core.expr.Expr):
         return assemble_expressions.assemble_expression(expr)
     else:
         raise TypeError(f"Unable to assemble: {expr}")
+
+
+def _assemble(expr, tensor=None, bcs=None, *, validate_opts=True, **kwargs):
+    opts = _make_assembly_opts(expr, tensor, bcs, **kwargs)
+    if validate_opts:
+        _validate_assembly_opts(expr, tensor, bcs, opts)
+
+    bcs = solving._extract_bcs(bcs)  # do more here
+    if opts.assembly_rank == AssemblyRank.SCALAR:
+        return _assemble_scalar(expr, tensor, bcs, opts)
+    elif opts.assembly_rank == AssemblyRank.VECTOR:
+        return _assemble_vector(expr, tensor, bcs, opts)
+    elif opts.assembly_rank == AssemblyRank.MATRIX:
+        return _assemble_matrix(expr, tensor, bcs, opts)
+    else:
+        raise AssertionError
+
+
+def _make_assembly_opts(expr, tensor, bcs,
+                        diagonal=False, 
+                        assembly_type="solution", 
+                        form_compiler_parameters=None, 
+                        mat_type=None, 
+                        sub_mat_type=None, 
+                        appctx=None, 
+                        options_prefix=None,
+                        nest=None,
+                        collect_loops=None,
+                        allocate_only=None):
+    if nest:
+        raise ValueError("Can't use 'nest', set 'mat_type' instead")
+    if collect_loops or allocate_only:
+        raise RuntimeError
+
+    assembly_rank = _get_assembly_rank(expr, diagonal)
+    mat_type, sub_mat_type = get_mat_type(mat_type, sub_mat_type, expr.arguments())
+
+    return _AssemblyOpts(assembly_rank, diagonal, assembly_type, 
+                         form_compiler_parameters, mat_type, sub_mat_type, 
+                         appctx, options_prefix)
+
+
+def _validate_assembly_opts(expr, tensor, bcs, opts):
+    if opts.assembly_type not in ("solution", "residual"):
+        raise ValueError("assembly_type must be either 'solution' or 'residual'")
+
+
+def _get_assembly_rank(expr, diagonal):
+    rank = len(expr.arguments())
+    if diagonal:
+        assert rank == 2
+        return AssemblyRank.VECTOR
+    if rank == 0:
+        return AssemblyRank.SCALAR
+    if rank == 1:
+        return AssemblyRank.VECTOR
+    if rank == 2:
+        return AssemblyRank.MATRIX
+    raise AssertionError
 
 
 def _assemble_scalar(expr, scalar, **kwargs):
@@ -652,20 +700,6 @@ def _make_parloop_inner(expr, create_op2arg, *, assembly_rank, diagonal,
         except MapValueError:
             raise RuntimeError("Integral measure does not match measure of all coefficients/arguments")
     return tuple(parloops)
-
-
-def _get_assembly_rank(expr, diagonal):
-    rank = len(expr.arguments())
-    if diagonal:
-        assert rank == 2
-        return AssemblyRank.VECTOR
-    if rank == 0:
-        return AssemblyRank.SCALAR
-    if rank == 1:
-        return AssemblyRank.VECTOR
-    if rank == 2:
-        return AssemblyRank.MATRIX
-    raise AssertionError
 
 
 @utils.known_pyop2_safe
