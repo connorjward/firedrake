@@ -2,7 +2,7 @@ name: Python Example with pytest
 on:
   push:
     branches:
-      - master
+      - perf-action  # set to master when deploying
 
 permissions:
   contents: write
