@@ -1,7 +1,7 @@
 import time
 
 
-def something(duration=0.000001):
+def something(duration=0.001):
     """
     Function that needs some serious benchmarking.
     """
@@ -20,7 +20,7 @@ def test_my_stuff1(benchmark):
 
 def test_my_stuff2(benchmark):
     # benchmark something
-    result = benchmark(something, 0.002)
+    result = benchmark(something, 0.0002)
 
     # Extra code, to verify that the run completed correctly.
     # Sometimes you may want to check the result, fast functions
@@ -29,7 +29,7 @@ def test_my_stuff2(benchmark):
 
 def test_my_stuff3(benchmark):
     # benchmark something
-    result = benchmark(something, 0.0008)
+    result = benchmark(something, 0.00008)
 
     # Extra code, to verify that the run completed correctly.
     # Sometimes you may want to check the result, fast functions
