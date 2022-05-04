@@ -20,7 +20,8 @@ jobs:
     steps:
       - name: Fix permissions
         run: |
-          sudo chmod -R 777 $GITHUB_WORKSPACE /github /__w/_temp /__w/firedrake
+          sudo chmod -R 777 $GITHUB_WORKSPACE /github /__w/_temp
+          sudo chown -R root:root /__w/firedrake
       - uses: actions/checkout@v2
       - name: Install benchmark dependencies
         run: |
