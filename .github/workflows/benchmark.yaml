@@ -28,7 +28,7 @@ jobs:
       - name: Install benchmark dependencies
         run: |
           . ../build/bin/activate
-          python -m pip install pytest pytest-benchmark
+          python -m pip install scipy pytest pytest-benchmark
       - name: Run benchmarks
         run: |
           cd ..  # so we don't use the wrong Firedrake
