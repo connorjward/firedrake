@@ -2,7 +2,7 @@ name: Run benchmarks
 on:
   push:
     branches:
-      - perf-action  # TODO set to master when deploying
+      - benchmark  # TODO set to master when deploying
 
 permissions:
   contents: write
@@ -12,10 +12,15 @@ jobs:
   benchmark:
     name: Run benchmarks
     runs-on: ubuntu-latest  # TODO runs-on: self-hosted
+    container:
+      image: firedrakeproject/firedrake-vanilla:latest
     env:
       OMP_NUM_THREADS: 1
       OPENBLAS_NUM_THREADS: 1
     steps:
+      - name: Fix permissions
+        run: |
+          sudo chmod -R 777 $GITHUB_WORKSPACE /github /__w/_temp
       - uses: actions/checkout@v2
       - name: Build Firedrake
         run: |
