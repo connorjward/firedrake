@@ -12,25 +12,30 @@ jobs:
   benchmark:
     name: Run benchmarks
     runs-on: ubuntu-latest  # TODO runs-on: self-hosted
+    # The docker container to use.
     container:
-      image: firedrakeproject/firedrake-vanilla:latest
+      image: firedrakeproject/firedrake-env:latest
     env:
       OMP_NUM_THREADS: 1
       OPENBLAS_NUM_THREADS: 1
     steps:
-      - name: Fix permissions
-        run: |
-          sudo chmod -R 777 $GITHUB_WORKSPACE /github /__w/_temp
-          sudo chown -R root:root /__w/firedrake
       - uses: actions/checkout@v2
+      - name: Setup python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+      - name: Build Firedrake
+        run: |
+          cd ..
+          ./firedrake/scripts/firedrake-install --venv-name build --disable-ssh --minimal-petsc --no-package-manager || (cat firedrake-install.log && /bin/false)
       - name: Install benchmark dependencies
         run: |
-          . /home/firedrake/firedrake/bin/activate
+          . ../build/bin/activate
           python -m pip install -e .
           python -m pip install pytest pytest-benchmark
       - name: Run benchmarks
         run: |
-          . /home/firedrake/firedrake/bin/activate
+          . ../build/bin/activate
           python -m pytest --benchmark-only --benchmark-json output.json --verbose benchmarks tests
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
