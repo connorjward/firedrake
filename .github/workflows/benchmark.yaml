@@ -22,18 +22,15 @@ jobs:
         run: |
           sudo chmod -R 777 $GITHUB_WORKSPACE /github /__w/_temp
       - uses: actions/checkout@v2
-      - name: Build Firedrake
-        run: |
-          ./scripts/firedrake-install --venv-name firedrake-venv --disable-ssh --minimal-petsc || (cat firedrake-install.log && /bin/false)
       - name: Install benchmark dependencies
         run: |
-          . firedrake-venv/bin/activate
-          firedrake-clean
+          . /home/firedrake/firedrake/bin/activate
+          python -m pip install -e .
           python -m pip install pytest pytest-benchmark
       - name: Run benchmarks
         run: |
-          . firedrake-venv/bin/activate
-          python -m pytest benchmarks --benchmark-json output.json --verbose
+          . /home/firedrake/firedrake/bin/activate
+          python -m pytest --benchmark-only --benchmark-json output.json --verbose benchmarks tests
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:

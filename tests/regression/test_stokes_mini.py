@@ -62,8 +62,7 @@ def run_stokes_mini(mat_type, n):
     return errornorm(uexact, u, degree_rise=0), errornorm(pexact, p, degree_rise=0)
 
 
-@pytest.mark.parametrize('mat_type', ["aij", "nest"])
-def test_stokes_mini(mat_type):
+def check_stokes_mini(mat_type):
     u_err = []
     p_err = []
 
@@ -76,3 +75,16 @@ def test_stokes_mini(mat_type):
     p_err = np.asarray(p_err)
     assert (np.log2(u_err[:-1] / u_err[1:]) > 2).all()
     assert (np.log2(p_err[:-1] / p_err[1:]) > 1.5).all()
+
+
+@pytest.fixture(params=["aij", "nest"])
+def mat_type(request):
+    return request.param
+
+
+def test_stokes_mini(mat_type):
+    check_stokes_mini(mat_type)
+
+
+def test_stokes_mini_benchmark(mat_type, benchmark):
+    benchmark(check_stokes_mini, mat_type)
