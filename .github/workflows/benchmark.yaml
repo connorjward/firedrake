@@ -33,13 +33,31 @@ jobs:
         run: |
           cd ..  # so we don't use the wrong Firedrake
           . build/bin/activate
-          python -m pytest --benchmark-only --benchmark-json firedrake/output.json --verbose firedrake/benchmarks firedrake/tests
+          python -m pytest --benchmark-only --benchmark-json firedrake/benchmarks-output.json --verbose firedrake/benchmarks firedrake/tests
+      - name: Run test benchmarks
+        run: |
+          cd ..  # so we don't use the wrong Firedrake
+          . build/bin/activate
+          python -m pytest --benchmark-only --benchmark-json firedrake/tests-output.json --verbose firedrake/benchmarks firedrake/tests
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
           name: Python Benchmark with pytest-benchmark
           tool: 'pytest'
-          output-file-path: output.json
+          output-file-path: benchmarks-output.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          # Show alert with commit comment on detecting possible performance regression
+          alert-threshold: '200%'
+          comment-on-alert: true
+          fail-on-alert: false
+          alert-comment-cc-users: '@connorjward'
+      - name: Store benchmark test result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Python Benchmark with pytest-benchmark
+          tool: 'pytest'
+          output-file-path: tests-output.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
           # Show alert with commit comment on detecting possible performance regression
