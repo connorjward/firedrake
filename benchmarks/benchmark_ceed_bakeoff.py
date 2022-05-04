@@ -9,6 +9,7 @@ from firedrake.petsc import PETSc
 from mpi4py import MPI
 
 import numpy as np
+import pytest
 
 parprint = PETSc.Sys.Print
 
@@ -115,23 +116,35 @@ def solve_problem(problem, solver_parameters):
     with time_monitor:
         solver.solve()
 
-solver_parameters = {
-    'mat_type': 'matfree',
-    'ksp_type': 'cg', "ksp_rtol": 1e-6, 'ksp_max_it': 999, 'ksp_norm_type': 'unpreconditioned' ,'ksp_view': None, 'ksp_monitor_true_residual_': None, 'ksp_converged_reason': None,
-    'pc_type':  'none'
-}
+@pytest.fixture
+def solver_parameters():
+    params = {
+        'mat_type': 'matfree',
+        'ksp_type': 'cg',
+        "ksp_rtol": 1e-6,
+        'ksp_max_it': 999,
+        'ksp_norm_type': 'unpreconditioned',
+        'ksp_view': None,
+        'ksp_monitor_true_residual_': None,
+        'ksp_converged_reason': None,
+        'pc_type':  'none'
+    }
 
-# Jacobi options:
-# pc_jacobi_type = diagonal,rowmax,rowsum
-# pc_jacobi_abs
-# pc_jacobi_fixdiag
-alternative = {'pc_type': 'jacobi', 'pc_jacobi_type': 'diagonal'}
-solver_parameters.update(alternative)
+    # Jacobi options:
+    # pc_jacobi_type = diagonal,rowmax,rowsum
+    # pc_jacobi_abs
+    # pc_jacobi_fixdiag
+    alternative = {'pc_type': 'jacobi', 'pc_jacobi_type': 'diagonal'}
+    params.update(alternative)
+    return params
 
-if __name__ == '__main__':
-    # TODO: Output MPI info
-    comm = COMM_WORLD
-    parprint(f'Total ranks : {comm.size}')
 
-    lvp = setup_problem(5, 12, 3)
-    solve_problem(lvp, solver_parameters=solver_parameters)
+# TODO I don't know what to do with the second and third parameters here
+@pytest.fixture(params=[(i, 12, 3) for i in range(1, 7)])
+def problem(request):
+    breakpoint()
+    bp, s, p = request.param
+    return setup_problem(bp, s, p)
+
+def benchmark_solve(problem, solver_parameters, benchmark):
+    benchmark(solve_problem, problem, solver_parameters)
