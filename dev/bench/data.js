@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1651695428375,
+  "lastUpdate": 1651695430036,
   "repoUrl": "https://github.com/connorjward/firedrake",
   "entries": {
     "Python Benchmark with pytest-benchmark": [
@@ -204,6 +204,44 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0.08704461064928451",
             "extra": "mean: 1.220399154000188 sec\nrounds: 5"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "c.ward20@imperial.ac.uk",
+            "name": "Connor Ward",
+            "username": "connorjward"
+          },
+          "committer": {
+            "email": "c.ward20@imperial.ac.uk",
+            "name": "Connor Ward",
+            "username": "connorjward"
+          },
+          "distinct": true,
+          "id": "399e07f25b9443ae0a347bcc10c0f74d5e40ff1d",
+          "message": "test everything please",
+          "timestamp": "2022-05-04T20:22:28+01:00",
+          "tree_id": "bb18d30369de877bc6a4b79f56bdba198686eaf0",
+          "url": "https://github.com/connorjward/firedrake/commit/399e07f25b9443ae0a347bcc10c0f74d5e40ff1d"
+        },
+        "date": 1651695429521,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "tests/regression/test_stokes_mini.py::test_stokes_mini_benchmark[aij]",
+            "value": 0.7446622244632146,
+            "unit": "iter/sec",
+            "range": "stddev: 0.2437906765316032",
+            "extra": "mean: 1.3428907323999737 sec\nrounds: 5"
+          },
+          {
+            "name": "tests/regression/test_stokes_mini.py::test_stokes_mini_benchmark[nest]",
+            "value": 0.8376218958751124,
+            "unit": "iter/sec",
+            "range": "stddev: 0.02300852510689",
+            "extra": "mean: 1.1938560881998455 sec\nrounds: 5"
           }
         ]
       }
