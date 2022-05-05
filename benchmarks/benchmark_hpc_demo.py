@@ -16,7 +16,7 @@ def run_solve(problem, parameters):
 @pytest.fixture(scope="module")
 def mesh():
     Nx = 8
-    Nref = 2
+    Nref = 3
 
     # Create mesh and mesh hierarchy
     mesh = UnitCubeMesh(Nx, Nx, Nx)
