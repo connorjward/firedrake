@@ -33,12 +33,12 @@ jobs:
         run: |
           cd ..  # so we don't use the wrong Firedrake
           . build/bin/activate
-          python -m pytest --benchmark-only --benchmark-json firedrake/benchmarks-output.json --verbose firedrake/benchmarks firedrake/tests
+          python -m pytest --benchmark-only --benchmark-json firedrake/benchmarks-output.json --verbose firedrake/benchmarks
       - name: Run test benchmarks
         run: |
           cd ..  # so we don't use the wrong Firedrake
           . build/bin/activate
-          python -m pytest --benchmark-only --benchmark-json firedrake/tests-output.json --verbose firedrake/benchmarks firedrake/tests
+          python -m pytest --benchmark-only --benchmark-json firedrake/tests-output.json --verbose firedrake/tests
       - name: Store benchmark result
         uses: benchmark-action/github-action-benchmark@v1
         with:
