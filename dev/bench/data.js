@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1652104820426,
+  "lastUpdate": 1652107178164,
   "repoUrl": "https://github.com/connorjward/firedrake",
   "entries": {
     "Python Benchmark with pytest-benchmark": [
@@ -160,6 +160,86 @@ window.BENCHMARK_DATA = {
             "unit": "iter/sec",
             "range": "stddev: 0",
             "extra": "mean: 29.959651702999963 sec\nrounds: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "c.ward20@imperial.ac.uk",
+            "name": "Connor Ward",
+            "username": "connorjward"
+          },
+          "committer": {
+            "email": "c.ward20@imperial.ac.uk",
+            "name": "Connor Ward",
+            "username": "connorjward"
+          },
+          "distinct": true,
+          "id": "33a41a76a1691f68a35bc626fef710150f99fd39",
+          "message": "Remove breakpoint",
+          "timestamp": "2022-05-09T15:07:58+01:00",
+          "tree_id": "5ee381712f05359d480e587510d6d4065b41ff48",
+          "url": "https://github.com/connorjward/firedrake/commit/33a41a76a1691f68a35bc626fef710150f99fd39"
+        },
+        "date": 1652107177436,
+        "tool": "pytest",
+        "benches": [
+          {
+            "name": "benchmark_ceed_bakeoff.py::benchmark_solve[problem0]",
+            "value": 0.9674701377002841,
+            "unit": "iter/sec",
+            "range": "stddev: 0.039845651674735895",
+            "extra": "mean: 1.0336236345000174 sec\nrounds: 2"
+          },
+          {
+            "name": "benchmark_ceed_bakeoff.py::benchmark_solve[problem1]",
+            "value": 0.4218262200159156,
+            "unit": "iter/sec",
+            "range": "stddev: 0",
+            "extra": "mean: 2.37064448000001 sec\nrounds: 1"
+          },
+          {
+            "name": "benchmark_ceed_bakeoff.py::benchmark_solve[problem2]",
+            "value": 0.03990675843039215,
+            "unit": "iter/sec",
+            "range": "stddev: 0",
+            "extra": "mean: 25.05841214200001 sec\nrounds: 1"
+          },
+          {
+            "name": "benchmark_ceed_bakeoff.py::benchmark_solve[problem3]",
+            "value": 0.01711854109257633,
+            "unit": "iter/sec",
+            "range": "stddev: 0",
+            "extra": "mean: 58.41619298000006 sec\nrounds: 1"
+          },
+          {
+            "name": "benchmark_ceed_bakeoff.py::benchmark_solve[problem4]",
+            "value": 0.034090516449899244,
+            "unit": "iter/sec",
+            "range": "stddev: 0",
+            "extra": "mean: 29.333671183000092 sec\nrounds: 1"
+          },
+          {
+            "name": "benchmark_ceed_bakeoff.py::benchmark_solve[problem5]",
+            "value": 0.013937290460639332,
+            "unit": "iter/sec",
+            "range": "stddev: 0",
+            "extra": "mean: 71.74995762799995 sec\nrounds: 1"
+          },
+          {
+            "name": "benchmark_hpc_demo.py::benchmark_solve[fmg_matfree_telescope]",
+            "value": 0.008174210225693566,
+            "unit": "iter/sec",
+            "range": "stddev: 0",
+            "extra": "mean: 122.33597771400014 sec\nrounds: 1"
+          },
+          {
+            "name": "benchmark_hybridisation_gtmg.py::benchmark_hybridisation_gtmg",
+            "value": 0.03134288409144289,
+            "unit": "iter/sec",
+            "range": "stddev: 0",
+            "extra": "mean: 31.905168557000025 sec\nrounds: 1"
           }
         ]
       }
