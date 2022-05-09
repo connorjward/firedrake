@@ -12,52 +12,36 @@ jobs:
   benchmark:
     name: Run benchmarks
     runs-on: ubuntu-latest  # TODO runs-on: self-hosted
+    container:
+      image: firedrakeproject/firedrake-vanilla:latest
     env:
       OMP_NUM_THREADS: 1
       OPENBLAS_NUM_THREADS: 1
     steps:
+      - name: Fix permissions
+        # Firedrake's Dockerfile sets USER to firedrake instead of
+        # using the default user, so we need to update file
+        # permissions for this image to work on GH Actions.
+        # See https://help.github.com/en/actions/reference/virtual-environments-for-github-hosted-runners#docker-container-filesystem
+        # (copied from https://help.github.com/en/actions/migrating-to-github-actions/migrating-from-circleci-to-github-actions)
+        run: |
+          sudo chmod -R 777 $GITHUB_WORKSPACE /github /__w/_temp
       - uses: actions/checkout@v2
-      - name: Setup python
-        uses: actions/setup-python@v2
-        with:
-          python-version: 3.8
-      - name: Build Firedrake
+      - name: Install
         run: |
-          cd ..
-          ./firedrake/scripts/firedrake-install --venv-name build --disable-ssh --minimal-petsc || (cat firedrake-install.log && /bin/false)
-      - name: Install benchmark dependencies
-        run: |
-          . ../build/bin/activate
-          python -m pip install scipy pytest pytest-benchmark
+          . /home/firedrake/firedrake/bin/activate
+          python -m pip install -e .
+          python -m pip install pytest pytest-benchmark
       - name: Run benchmarks
         run: |
-          cd ..  # so we don't use the wrong Firedrake
-          . build/bin/activate
-          python -m pytest --benchmark-only --benchmark-json firedrake/benchmarks-output.json --verbose firedrake/benchmarks
-      - name: Run test benchmarks
-        run: |
-          cd ..  # so we don't use the wrong Firedrake
-          . build/bin/activate
-          python -m pytest --benchmark-only --benchmark-json firedrake/tests-output.json --verbose firedrake/tests
-      - name: Store benchmark result
+          . /home/firedrake/firedrake/bin/activate
+          python -m pytest --benchmark-only --benchmark-json output.json benchmarks
+      - name: Push output to GitHub pages
         uses: benchmark-action/github-action-benchmark@v1
         with:
           name: Python Benchmark with pytest-benchmark
           tool: 'pytest'
-          output-file-path: benchmarks-output.json
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: true
-          # Show alert with commit comment on detecting possible performance regression
-          alert-threshold: '200%'
-          comment-on-alert: true
-          fail-on-alert: false
-          alert-comment-cc-users: '@connorjward'
-      - name: Store benchmark test result
-        uses: benchmark-action/github-action-benchmark@v1
-        with:
-          name: Python Benchmark with pytest-benchmark
-          tool: 'pytest'
-          output-file-path: tests-output.json
+          output-file-path: output.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
           # Show alert with commit comment on detecting possible performance regression
