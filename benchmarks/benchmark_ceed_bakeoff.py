@@ -205,7 +205,6 @@ def solver_parameter_fixture():
 # @pytest.fixture(params=[(ii, 12, p) for ii in range(1, 7) for p in range(1, 9)])
 @pytest.fixture(params=[(i, 15, 3) for i in range(1, 7)])
 def problem(request):
-    breakpoint()
     problem_number, size, degree = request.param
     return setup_problem(problem_number, size, degree)
 
