@@ -24,8 +24,10 @@ jobs:
         # permissions for this image to work on GH Actions.
         # See https://help.github.com/en/actions/reference/virtual-environments-for-github-hosted-runners#docker-container-filesystem
         # (copied from https://help.github.com/en/actions/migrating-to-github-actions/migrating-from-circleci-to-github-actions)
+        # Also see: https://github.com/actions/checkout/issues/760
         run: |
           sudo chmod -R 777 $GITHUB_WORKSPACE /github /__w/_temp
+          git config --global --add safe.directory /__w/firedrake/firedrake
       - uses: actions/checkout@v2
       - name: Install
         run: |
